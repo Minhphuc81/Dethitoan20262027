@@ -26,6 +26,16 @@ interface MathTextProps {
   block?: boolean;
 }
 
+// ✅ Tự động chuyển < và > bên trong công thức LaTeX thành &lt; và &gt;
+// Tránh trình duyệt hiểu nhầm <x là thẻ HTML làm mất đoạn văn phía sau
+const sanitizeMathHtml = (raw: string): string => {
+  if (!raw) return '';
+  return raw.replace(
+    /(\$\$[\s\S]*?\$\$|\$[^$]+?\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g,
+    (match) => match.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  );
+};
+
 const MathText: React.FC<MathTextProps> = ({ html, className = '', block = false }) => {
   const ref = useRef<HTMLElement>(null);
   const initialized = useRef(false);
@@ -40,8 +50,8 @@ const MathText: React.FC<MathTextProps> = ({ html, className = '', block = false
       return; // Đã render rồi, skip để giữ MathJax output
     }
     
-    // Set innerHTML trực tiếp qua ref (KHÔNG dùng dangerouslySetInnerHTML)
-    ref.current.innerHTML = newHash;
+    // Set innerHTML trực tiếp qua ref (đã xử lý an toàn cho dấu <, > trong công thức)
+    ref.current.innerHTML = sanitizeMathHtml(newHash);
     contentHash.current = newHash;
     
     // Typeset MathJax
