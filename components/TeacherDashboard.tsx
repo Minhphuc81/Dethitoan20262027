@@ -528,9 +528,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     setExportingExamId(exam.id);
     try {
       if (withAnswers) {
-        await exportExamWithAnswers(exam, user.name, 'LMS Thầy Phúc');
+        await exportExamWithAnswers(exam, user.name, 'Minh Phuc - Edu');
       } else {
-        await exportExamOnly(exam, user.name, 'LMS Thầy Phúc');
+        await exportExamOnly(exam, user.name, 'Minh Phuc - Edu');
       }
     } catch (err) {
       alert('❌ Lỗi xuất Word: ' + (err as Error).message + '\n\nHãy chắc chắn đã cài: npm install docx');
@@ -550,7 +550,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           <div className="flex items-center gap-4">
             <div className="text-3xl">👨‍🏫</div>
             <div>
-              <h1 className="text-xl font-bold">LMS Thầy Phúc</h1>
+              <h1 className="text-xl font-bold">Minh Phuc - Edu</h1>
               <p className="text-teal-100 text-sm">{user.name}</p>
             </div>
           </div>
