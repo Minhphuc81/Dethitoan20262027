@@ -21,58 +21,111 @@ export type { TrueFalseMode };
 //   ✓ Submission cũ (format "a,c") → hành vi cũ hoàn toàn (điểm không thay đổi)
 //   ✓ Submission mới (format "a:T,b:F,c:T,d:F") → hành vi mới (bỏ qua mệnh đề chưa chọn)
 //
-function parseTFAnswerStrict(
-  answer: string | undefined,
+export type TrueFalseValue = 'T' | 'F';
+
+function normalizeTFLetter(raw: string): string {
+  return (raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/["'{}\[\]\s]/g, '');
+}
+
+function normalizeTFValue(raw: unknown): TrueFalseValue | undefined {
+  if (raw === true || raw === 1) return 'T';
+  if (raw === false || raw === 0) return 'F';
+
+  const value = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+
+  if (['t', 'true', 'd', 'dung', '1'].includes(value)) return 'T';
+  if (['f', 'false', 's', 'sai', '0'].includes(value)) return 'F';
+  return undefined;
+}
+
+/**
+ * Đọc đáp án Đúng/Sai theo cùng một quy ước cho cả chấm điểm và hiển thị.
+ *
+ * Hỗ trợ:
+ * - Mới: a:T,b:F,c:T,d:F
+ * - Cũ: a,c  (a,c đúng; các ý còn lại sai)
+ * - JSON: {"a":true,"b":false}
+ * - Giá trị tiếng Việt: a:Đ,b:S hoặc a:Đúng,b:Sai
+ */
+export function parseTrueFalseAnswer(
+  answer: string | undefined | null,
   allLetters: string[]
-): Record<string, 'T' | 'F'> {
-  const map: Record<string, 'T' | 'F'> = {};
-  if (!answer || !answer.trim()) return map;
+): Record<string, TrueFalseValue> {
+  const map: Record<string, TrueFalseValue> = {};
+  const letters = Array.from(
+    new Set(allLetters.map(normalizeTFLetter).filter(Boolean))
+  );
+  const raw = String(answer ?? '').trim();
+  if (!raw) return map;
 
-  // ── Format MỚI: có dấu ":" → parse tường minh, undefined = chưa trả lời
-  if (answer.includes(':')) {
-    for (const part of answer.split(',').map((s) => s.trim()).filter(Boolean)) {
-      if (part.includes(':')) {
-        const [letter, val] = part.split(':');
-        if (letter && (val === 'T' || val === 'F')) {
-          map[letter.toLowerCase()] = val;
-        }
-      }
-    }
-    // Trả về map — các letter không có = undefined = chưa trả lời
-    return map;
-  }
-
-  // ── Format CŨ 2: JSON object {"a":true,"c":true}
+  // JSON phải thử TRƯỚC vì JSON cũng có dấu hai chấm.
   try {
-    const parsed = JSON.parse(answer);
-    if (typeof parsed === 'object' && parsed !== null) {
-      const trueLetters = new Set(
-        Object.keys(parsed)
-          .filter((k) => parsed[k] === true)
-          .map((k) => k.toLowerCase())
-      );
-      // Backward compat: điền đủ tất cả letters (không có = FALSE)
-      for (const letter of allLetters) {
-        map[letter] = trueLetters.has(letter) ? 'T' : 'F';
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [rawLetter, rawValue] of Object.entries(parsed)) {
+        const letter = normalizeTFLetter(rawLetter);
+        const value = normalizeTFValue(rawValue);
+        if (letter && value) map[letter] = value;
+      }
+
+      // Submission JSON cũ thường chỉ lưu các ý Đúng; ý không có được hiểu là Sai.
+      for (const letter of letters) {
+        if (map[letter] === undefined) map[letter] = 'F';
       }
       return map;
     }
   } catch {
-    // không phải JSON
+    // Không phải JSON, tiếp tục thử các format chuỗi.
   }
 
-  // ── Format CŨ 1: "a,c" → a,c = TRUE; còn lại = FALSE
+  // Format tường minh: a:T,b:F hoặc a=Đúng;b=Sai.
+  if (/[:=]/.test(raw)) {
+    for (const part of raw.split(/[;,]/).map((s) => s.trim()).filter(Boolean)) {
+      const separatorIndex = part.search(/[:=]/);
+      if (separatorIndex < 0) continue;
+
+      const letter = normalizeTFLetter(part.slice(0, separatorIndex));
+      const value = normalizeTFValue(part.slice(separatorIndex + 1));
+      if (letter && value) map[letter] = value;
+    }
+    return map; // Ý không xuất hiện = chưa trả lời.
+  }
+
+  // Format cũ: "a,c" → a,c Đúng; các ý còn lại Sai.
   const trueLetters = new Set(
-    answer
-      .toLowerCase()
-      .split(',')
-      .map((s) => s.trim())
+    raw
+      .split(/[;,\s]+/)
+      .map(normalizeTFLetter)
       .filter(Boolean)
   );
-  for (const letter of allLetters) {
+
+  for (const letter of letters) {
     map[letter] = trueLetters.has(letter) ? 'T' : 'F';
   }
   return map;
+}
+
+/** Alias giữ tương thích với code cũ trong service. */
+function parseTFAnswerStrict(
+  answer: string | undefined,
+  allLetters: string[]
+): Record<string, TrueFalseValue> {
+  return parseTrueFalseAnswer(answer, allLetters);
+}
+
+export function parseTrueFalseCorrectAnswer(
+  answer: string | undefined | null,
+  allLetters: string[]
+): Record<string, TrueFalseValue> {
+  return parseTrueFalseAnswer(answer, allLetters);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -198,13 +251,14 @@ export function updateSectionPoints(
 export function calculateTrueFalsePoints(
   correctCount: number,
   maxPointsPerQuestion: number,
-  mode: TrueFalseMode = 'equal'
+  mode: TrueFalseMode = 'equal',
+  totalStatements = 4
 ): number {
-  if (correctCount <= 0) return 0;
+  if (correctCount <= 0 || totalStatements <= 0) return 0;
 
   let ratio: number;
 
-  if (mode === 'stepped') {
+  if (mode === 'stepped' && totalStatements === 4) {
     const steppedRatios: Record<number, number> = {
       1: 0.10,
       2: 0.25,
@@ -213,7 +267,7 @@ export function calculateTrueFalsePoints(
     };
     ratio = steppedRatios[correctCount] ?? 0;
   } else {
-    ratio = correctCount / 4;
+    ratio = Math.min(1, correctCount / totalStatements);
   }
 
   return parseFloat((maxPointsPerQuestion * ratio).toFixed(4));
@@ -301,48 +355,39 @@ export function calculateScore(
       tfPoints += pointsPerQuestion;
 
       if (correctAnswer) {
-        // correctAnswer trong Firestore vẫn là format cũ "a,c"
-        // → a,c là TRUE; b,d là FALSE
-        const correctTrueSet = new Set(
-          correctAnswer
-            .toLowerCase()
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-        );
-
-        // Lấy danh sách letters từ options thực tế (hoặc fallback a,b,c,d)
         const allLetters =
           q.options && q.options.length > 0
             ? q.options.map((opt: { letter: string }) => opt.letter.toLowerCase())
             : ['a', 'b', 'c', 'd'];
 
-        // ✅ Parse student answer — tự nhận dạng format mới/cũ/JSON
+        // Đáp án chuẩn và bài làm học sinh đều dùng cùng một bộ parser.
+        // Nhờ vậy các format a,c / a:T,b:F / JSON đều chấm giống nhau.
+        const correctMap = parseTrueFalseCorrectAnswer(correctAnswer, allLetters);
         const tfMap = parseTFAnswerStrict(userAnswer, allLetters);
 
         let correctCount = 0;
         let answeredCount = 0;
 
         for (const letter of allLetters) {
-          const studentVal = tfMap[letter]; // 'T' | 'F' | undefined
+          const studentVal = tfMap[letter];
+          const correctVal = correctMap[letter];
 
-          if (studentVal === undefined) {
-            // Format mới: undefined = chưa trả lời → bỏ qua
-            // Format cũ: parseTFAnswerStrict đã điền đủ → không có undefined
-            continue;
-          }
-
+          if (studentVal === undefined) continue;
           answeredCount++;
-          const studentSaidTrue = studentVal === 'T';
-          const correctIsTrue = correctTrueSet.has(letter);
 
-          if (studentSaidTrue === correctIsTrue) correctCount++;
+          if (correctVal !== undefined && studentVal === correctVal) {
+            correctCount++;
+          }
         }
 
-        // Nếu chưa trả lời bất kỳ ý nào → 0 điểm
         const points = answeredCount === 0
           ? 0
-          : calculateTrueFalsePoints(correctCount, pointsPerQuestion, tfMode);
+          : calculateTrueFalsePoints(
+              correctCount,
+              pointsPerQuestion,
+              tfMode,
+              allLetters.length
+            );
 
         breakdown.trueFalse.points += points;
         breakdown.trueFalse.details[q.number] = {
@@ -350,7 +395,6 @@ export function calculateScore(
           points,
         };
 
-        // correct = đúng tất cả AND đã trả lời đủ; partial = đúng một phần
         if (correctCount === allLetters.length && answeredCount === allLetters.length) {
           breakdown.trueFalse.correct++;
         } else if (correctCount > 0) {

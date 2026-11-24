@@ -715,9 +715,11 @@ function parsePart2(paragraphs: ParagraphData[], startIdx: number, endIdx: numbe
         if (contentBuffer.length > 0 && !currentQ.text) currentQ.text = contentBuffer.join(' ').trim();
         if (solutionBuffer.length > 0) currentQ.solution = solutionBuffer.join(' ').trim();
 
-        if (!currentQ.correctAnswer && currentQuestionTrueStatements.size > 0) {
+        if (!currentQ.correctAnswer && currentQ.options.length > 0) {
           const trueStmts = Array.from(currentQuestionTrueStatements).sort();
-          currentQ.correctAnswer = trueStmts.join(',');
+          // Dấu "-" là đáp án hợp lệ: tất cả mệnh đề đều Sai.
+          // Dùng chuỗi truthy để scoringService không bỏ qua câu này.
+          currentQ.correctAnswer = trueStmts.length > 0 ? trueStmts.join(',') : '-';
           console.log(`📝 Câu ${currentQ.number} (Đúng/Sai): underline = ${currentQ.correctAnswer}`);
         }
 
@@ -823,9 +825,11 @@ function parsePart2(paragraphs: ParagraphData[], startIdx: number, endIdx: numbe
     if (contentBuffer.length > 0 && !currentQ.text) currentQ.text = contentBuffer.join(' ').trim();
     if (solutionBuffer.length > 0) currentQ.solution = solutionBuffer.join(' ').trim();
 
-    if (!currentQ.correctAnswer && currentQuestionTrueStatements.size > 0) {
+    if (!currentQ.correctAnswer && currentQ.options.length > 0) {
       const trueStmts = Array.from(currentQuestionTrueStatements).sort();
-      currentQ.correctAnswer = trueStmts.join(',');
+      // Dấu "-" là đáp án hợp lệ: tất cả mệnh đề đều Sai.
+      // Dùng chuỗi truthy để scoringService không bỏ qua câu này.
+      currentQ.correctAnswer = trueStmts.length > 0 ? trueStmts.join(',') : '-';
       console.log(`📝 Câu ${currentQ.number} (Đúng/Sai): underline = ${currentQ.correctAnswer}`);
     }
 
