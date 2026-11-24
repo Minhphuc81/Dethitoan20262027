@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ExamData, Question, QuestionOption, SectionInfo } from '../types';
+import { parseTrueFalseAnswer, parseTrueFalseCorrectAnswer } from '../services/scoringService';
 
 interface QuizViewProps {
   examData: ExamData;
   onBack: () => void;
   onExportHtml: () => void;
 }
+
+const serializeTrueFalseAnswer = (map: Record<string, 'T' | 'F'>): string =>
+  Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([letter, value]) => `${letter}:${value}`)
+    .join(',');
 
 const QuizView: React.FC<QuizViewProps> = ({ examData, onBack, onExportHtml }) => {
   const [userAnswers, setUserAnswers] = useState<{ [key: number]: string }>({});
@@ -74,14 +81,25 @@ const QuizView: React.FC<QuizViewProps> = ({ examData, onBack, onExportHtml }) =
       const userAnswer = userAnswers[q.number];
       if (!userAnswer || !q.correctAnswer) return;
       
-      if (q.type === 'writing') {
+      if (q.type === 'true_false') {
+        const allLetters = (q.options || []).map((opt) => opt.letter.toLowerCase());
+        const userMap = parseTrueFalseAnswer(userAnswer, allLetters);
+        const correctMap = parseTrueFalseCorrectAnswer(q.correctAnswer, allLetters);
+        const fullyCorrect =
+          allLetters.length > 0 &&
+          allLetters.every(
+            (letter) =>
+              userMap[letter] !== undefined &&
+              correctMap[letter] !== undefined &&
+              userMap[letter] === correctMap[letter]
+          );
+        if (fullyCorrect) correct++;
+      } else if (q.type === 'writing') {
         if (normalizeText(userAnswer) === normalizeText(q.correctAnswer)) {
           correct++;
         }
-      } else {
-        if (userAnswer.toUpperCase() === q.correctAnswer.toUpperCase()) {
-          correct++;
-        }
+      } else if (userAnswer.toUpperCase() === q.correctAnswer.toUpperCase()) {
+        correct++;
       }
     });
     return correct;
@@ -353,10 +371,24 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
       .trim();
   };
 
-  const isCorrect = question.type === 'writing'
+  const tfLetters = (question.options || []).map((opt) => opt.letter.toLowerCase());
+  const tfUserMap = parseTrueFalseAnswer(userAnswer, tfLetters);
+  const tfCorrectMap = parseTrueFalseCorrectAnswer(question.correctAnswer, tfLetters);
+
+  const isCorrect = question.type === 'true_false'
+    ? tfLetters.length > 0 && tfLetters.every(
+        (letter) =>
+          tfUserMap[letter] !== undefined &&
+          tfCorrectMap[letter] !== undefined &&
+          tfUserMap[letter] === tfCorrectMap[letter]
+      )
+    : question.type === 'writing'
     ? normalizeText(userAnswer || '') === normalizeText(question.correctAnswer || '')
     : userAnswer?.toUpperCase() === question.correctAnswer?.toUpperCase();
-  const hasAnswer = !!userAnswer;
+
+  const hasAnswer = question.type === 'true_false'
+    ? tfLetters.some((letter) => tfUserMap[letter] !== undefined)
+    : !!userAnswer;
 
   // Check if this is a PHONETICS section
   const isPhonetics = question.section?.name?.toLowerCase().includes('phonetics');
@@ -470,6 +502,70 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                   <span className="text-red-600 font-bold text-xl">✗</span>
                 )}
               </label>
+            );
+          })}
+        </div>
+      )}
+
+      {question.type === 'true_false' && question.options && (
+        <div className="ml-12 rounded-xl overflow-hidden border-2 border-teal-200">
+          <div className="grid grid-cols-[1fr_80px_80px] bg-teal-600 text-white text-sm font-bold">
+            <div className="p-3">Mệnh đề</div>
+            <div className="p-3 text-center border-l border-teal-500">Đúng</div>
+            <div className="p-3 text-center border-l border-teal-500">Sai</div>
+          </div>
+          {question.options.map((option: QuestionOption) => {
+            const key = option.letter.toLowerCase();
+            const value = tfUserMap[key];
+            const correctValue = tfCorrectMap[key];
+            const setValue = (next: 'T' | 'F') => {
+              const updated = { ...tfUserMap, [key]: next };
+              onAnswerChange(question.number, serializeTrueFalseAnswer(updated));
+            };
+            const statementCorrect =
+              value !== undefined && correctValue !== undefined && value === correctValue;
+
+            return (
+              <div
+                key={option.letter}
+                className={`grid grid-cols-[1fr_80px_80px] border-t border-teal-100 ${
+                  isSubmitted
+                    ? statementCorrect
+                      ? 'bg-green-50'
+                      : 'bg-red-50'
+                    : 'bg-white'
+                }`}
+              >
+                <div className="p-3 flex gap-2 items-start">
+                  <span className="w-7 h-7 rounded-full bg-teal-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    {key}
+                  </span>
+                  <span
+                    className="text-teal-900"
+                    dangerouslySetInnerHTML={{ __html: option.text }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={isSubmitted}
+                  onClick={() => setValue('T')}
+                  className={`border-l border-teal-100 font-bold ${
+                    value === 'T' ? 'bg-green-500 text-white' : 'hover:bg-green-100 text-green-700'
+                  }`}
+                >
+                  Đ
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitted}
+                  onClick={() => setValue('F')}
+                  className={`border-l border-teal-100 font-bold ${
+                    value === 'F' ? 'bg-red-500 text-white' : 'hover:bg-red-100 text-red-700'
+                  }`}
+                >
+                  S
+                </button>
+              </div>
             );
           })}
         </div>

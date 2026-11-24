@@ -1,7 +1,7 @@
 import React from 'react';
 import { Submission, Room, Exam, Question, QuestionOption } from '../types';
 import MathText from './MathText';
-import { formatScore } from '../services/scoringService';
+import { formatScore, parseTrueFalseAnswer, parseTrueFalseCorrectAnswer } from '../services/scoringService';
 
 interface ResultViewProps {
   submission: Submission;
@@ -474,41 +474,18 @@ const TrueFalseReview: React.FC<{
   showExplanations: boolean;
   breakdown?: { correctCount: number; points: number };
 }> = ({ question, userAnswer, correctAnswer, showCorrectAnswers, showExplanations, breakdown }) => {
-  let tfUserAnswers: { [key: string]: boolean } = {};
-  if (userAnswer) {
-    try {
-      tfUserAnswers = JSON.parse(userAnswer);
-    } catch {
-      const selected = userAnswer
-        .toLowerCase()
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      selected.forEach((letter) => {
-        tfUserAnswers[letter] = true;
-      });
-    }
-  }
+  const allLetters = (question.options || []).map((opt) => opt.letter.toLowerCase());
+  const tfUserAnswers = parseTrueFalseAnswer(userAnswer, allLetters);
+  const correctMap = parseTrueFalseCorrectAnswer(correctAnswer, allLetters);
 
-  const correctStatements = correctAnswer
-    .toLowerCase()
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  let allCorrect = true;
-  if (question.options) {
-    for (const opt of question.options) {
-      const key = opt.letter.toLowerCase();
-      const shouldBeTrue = correctStatements.includes(key);
-      // ✅ FIX: undefined (không tick) = false = Sai — dùng === true để convert đúng
-      const userSelected = tfUserAnswers[key] === true;
-      if (userSelected !== shouldBeTrue) {
-        allCorrect = false;
-        break;
-      }
-    }
-  }
+  const allCorrect =
+    allLetters.length > 0 &&
+    allLetters.every(
+      (letter) =>
+        tfUserAnswers[letter] !== undefined &&
+        correctMap[letter] !== undefined &&
+        tfUserAnswers[letter] === correctMap[letter]
+    );
 
   return (
     <div className={`p-4 ${showCorrectAnswers ? (allCorrect ? 'bg-green-50' : 'bg-red-50') : 'bg-gray-50'}`}>
@@ -536,7 +513,7 @@ const TrueFalseReview: React.FC<{
               Đúng sai • {formatScore(breakdown?.points ?? 0)}đ
             </span>
             <span className="text-xs text-gray-500">
-              {breakdown?.correctCount ?? 0}/4 ý đúng
+              {breakdown?.correctCount ?? 0}/{allLetters.length || 4} ý đúng
             </span>
           </div>
 
@@ -557,10 +534,13 @@ const TrueFalseReview: React.FC<{
             <div className="space-y-2">
               {question.options.map((opt: QuestionOption) => {
                 const key = opt.letter.toLowerCase();
-                const shouldBeTrue = correctStatements.includes(key);
-                // ✅ FIX: undefined (không tick) = false = Sai — dùng === true để convert đúng
-                const userSelected = tfUserAnswers[key] === true;
-                const isCorrectStatement = userSelected === shouldBeTrue;
+                const userValue = tfUserAnswers[key];
+                const correctValue = correctMap[key];
+                const userAnswered = userValue !== undefined;
+                const userSelected = userValue === 'T';
+                const shouldBeTrue = correctValue === 'T';
+                const isCorrectStatement =
+                  userAnswered && correctValue !== undefined && userValue === correctValue;
 
                 return (
                   <div
@@ -588,7 +568,7 @@ const TrueFalseReview: React.FC<{
                         }`}
                       >
                         {/* ✅ FIX: Không tick = Sai (S), không hiển thị "?" nữa */}
-                        Bạn: {userSelected ? 'Đ' : 'S'}
+                        Bạn: {userAnswered ? (userSelected ? 'Đ' : 'S') : '?'}
                       </span>
                       
                       {/* ✅ Chỉ hiển thị đáp án đúng nếu được phép */}

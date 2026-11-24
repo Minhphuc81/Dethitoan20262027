@@ -1,6 +1,6 @@
 import React from 'react';
 import { Submission, Exam, Question, QuestionOption, Room } from '../types';
-import { formatScore, getGrade } from '../services/scoringService';
+import { formatScore, getGrade, parseTrueFalseAnswer, parseTrueFalseCorrectAnswer } from '../services/scoringService';
 import MathText from './MathText';
 
 interface SubmissionDetailViewProps {
@@ -342,28 +342,9 @@ const TrueFalseDetail: React.FC<{
   userAnswer?: string;
   breakdown?: { correctCount: number; points: number };
 }> = ({ question, userAnswer, breakdown }) => {
-  let userAnswers: { [key: string]: boolean } = {};
-
-  if (userAnswer) {
-    try {
-      userAnswers = JSON.parse(userAnswer);
-    } catch {
-      const selected = userAnswer
-        .toLowerCase()
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      selected.forEach((letter) => {
-        userAnswers[letter] = true;
-      });
-    }
-  }
-
-  const correctStatements = (question.correctAnswer || '')
-    .toLowerCase()
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allLetters = (question.options || []).map((opt) => opt.letter.toLowerCase());
+  const userAnswers = parseTrueFalseAnswer(userAnswer, allLetters);
+  const correctMap = parseTrueFalseCorrectAnswer(question.correctAnswer, allLetters);
 
   const correctCount = breakdown?.correctCount || 0;
   const points = breakdown?.points || 0;
@@ -380,7 +361,7 @@ const TrueFalseDetail: React.FC<{
             <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
               Đúng sai • {formatScore(points)}đ
             </span>
-            <span className="text-sm text-gray-600">{correctCount}/4 ý đúng</span>
+            <span className="text-sm text-gray-600">{correctCount}/{allLetters.length || 4} ý đúng</span>
           </div>
         </div>
       </div>
@@ -389,9 +370,13 @@ const TrueFalseDetail: React.FC<{
         <div className="ml-13 space-y-2">
           {question.options.map((opt) => {
             const key = opt.letter.toLowerCase();
-            const shouldBeTrue = correctStatements.includes(key);
-            const userSelected = userAnswers[key] === true;
-            const isCorrect = userSelected === shouldBeTrue;
+            const userValue = userAnswers[key];
+            const correctValue = correctMap[key];
+            const userAnswered = userValue !== undefined;
+            const userSelected = userValue === 'T';
+            const shouldBeTrue = correctValue === 'T';
+            const isCorrect =
+              userAnswered && correctValue !== undefined && userValue === correctValue;
 
             return (
               <div
@@ -406,7 +391,7 @@ const TrueFalseDetail: React.FC<{
                 <MathText html={opt.text} className="flex-1 text-sm" />
                 <div className="flex items-center gap-2 text-xs">
                   <span className={`px-2 py-1 rounded ${userSelected ? 'bg-blue-500 text-white' : 'bg-gray-300'}`}>
-                    HS: {userSelected ? 'Đ' : 'S'}
+                    HS: {userAnswered ? (userSelected ? 'Đ' : 'S') : '?'}
                   </span>
                   <span
                     className={`px-2 py-1 rounded ${
