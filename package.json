@@ -14,7 +14,8 @@
     "firebase": "^10.14.0",
     "docx": "^8.5.0",
     "jszip": "^3.10.1",
-    "xlsx": "^0.18.5" 
+    "xlsx": "^0.18.5",
+    "katex": "^0.16.11"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
