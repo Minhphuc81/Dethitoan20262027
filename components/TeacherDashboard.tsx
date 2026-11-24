@@ -36,7 +36,7 @@ import { saveBankQuestion, type BankQuestionType } from '../services/questionBan
 
 // ✅ MỚI: Live monitoring panel
 import LiveMonitoringPanel from './LiveMonitoringPanel';
-
+import EditRoomModal from './EditRoomModal';
 // ✅ MỚI: Xuất đề Word
 import { exportExamOnly, exportExamWithAnswers } from '../services/examWordExportService';
 
@@ -106,7 +106,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
 
   // ✅ MỚI: Live monitoring
   const [monitoringRoom, setMonitoringRoom] = useState<Room | null>(null);
-
+const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   // ✅ MỚI: Export Word loading
   const [exportingExamId, setExportingExamId] = useState<string | null>(null);
 
@@ -895,6 +895,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             📊 Kết quả
                           </button>
                           <button
+  onClick={() => setEditingRoom(room)}
+  className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition text-sm font-medium"
+  title="Chỉnh sửa phòng thi"
+>
+  ✏️ Sửa
+</button>
+                          <button
                             onClick={() => handleRoomAction(room.id, 'delete')}
                             className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition text-sm font-medium"
                           >
@@ -1531,7 +1538,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
           onClose={() => setMonitoringRoom(null)}
         />
       )}
-    </div>
+   {/* ═══ MỚI: Edit Room Modal ═══ */}
+{editingRoom && (
+  <EditRoomModal
+    room={editingRoom}
+    classes={classes}
+    onClose={() => setEditingRoom(null)}
+    onSaved={() => loadData()}
+  />
+)} </div>
   );
 };
 
