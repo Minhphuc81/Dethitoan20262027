@@ -621,8 +621,9 @@ export {
 // ============ SUBMISSION FUNCTIONS ============
 
 export const createSubmission = async (submission: Omit<Submission, 'id'>): Promise<string> => {
+  const cleanData = sanitizeForFirestore(submission);
   const submissionRef = await addDoc(collection(db, 'submissions'), {
-    ...submission,
+    ...cleanData,
     startedAt: serverTimestamp()
   });
 
